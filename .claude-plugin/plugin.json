@@ -1,0 +1,19 @@
+{
+  "name": "deep-review",
+  "version": "0.1.0",
+  "description": "Multi-agent pull request review that surfaces every finding instead of hiding low-confidence ones. /deep-review:review scores each issue, then presents all of them in-session triaged into now/soon/optional tiers and posts to the PR on confirm. /deep-review:auto skips scoring, auto-applies fixes for every issue to the working tree, and posts a summary comment - no confirmation.",
+  "author": {
+    "name": "Ryan Robson and Robworks Software LLC"
+  },
+  "homepage": "https://github.com/Robworks-Code/deep-review",
+  "repository": "https://github.com/Robworks-Code/deep-review",
+  "license": "MIT",
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "github",
+    "triage",
+    "agents",
+    "developer-tools"
+  ]
+}
