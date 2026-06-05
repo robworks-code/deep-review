@@ -2,7 +2,7 @@
 allowed-tools: Read, Edit, Write, Glob, Grep, Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*)
 description: Fast deep review - skip scoring, auto-apply fixes for every issue found, then post a summary comment
 argument-hint: "[pr-number|pr-url|branch]"
-disable-model-invocation: false
+disable-model-invocation: true
 ---
 
 # /deep-review:auto
@@ -83,7 +83,17 @@ Could not auto-fix <M> issues (left for manual review):
 
 ---
 
-- If no fixes were applied and nothing was skipped, post: `### Deep review (auto-fix)\n\nNo issues found. Checked for bugs and CLAUDE.md compliance.\n\n🤖 Generated with [Claude Code](https://claude.ai/code)`
+- If no fixes were applied and nothing was skipped, post this instead (real newlines, not escaped):
+
+---
+
+### Deep review (auto-fix)
+
+No issues found. Checked for bugs and CLAUDE.md compliance.
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+---
 - Also report the same summary in-session, and remind the user the fixes are uncommitted.
 
 ## False positives (still drop these)
