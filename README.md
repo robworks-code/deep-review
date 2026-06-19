@@ -4,20 +4,22 @@ A Claude Code plugin for multi-agent pull request review that **surfaces every f
 
 The built-in `/code-review` command runs a 5-agent review, scores each candidate issue 0-100 for confidence, then filters out everything below 80 and posts only the survivors. That hard cutoff hides medium- and low-confidence findings entirely. `deep-review` keeps the same review engine but changes what happens to the findings.
 
+Both commands share a single canonical reference (`reference/review-shared.md`) for the reviewer roster, rubrics, false-positive list, link format, and output style, so they never drift apart.
+
 ## Commands
 
 ### `/deep-review:review [pr-number|pr-url|branch]`
 
 The default, full-fidelity review.
 
-- Runs the same engine as `/code-review`: eligibility check, CLAUDE.md gathering, PR summary, 5 parallel reviewers, and per-issue 0-100 confidence scoring.
-- **No 80 cutoff.** Every scored issue is kept and triaged into tiers by confidence:
-  - **Address now** (80-100) - high confidence, real, impactful; fix before merge.
-  - **Address soon** (50-79) - verified real, lower impact; worth a follow-up.
-  - **Optional / nitpick** (25-49) - minor or stylistic; author's discretion.
-  - **Likely false positive** (0-24) - listed briefly so nothing is hidden, but recommend dismissing.
-- Presents all issues in-session, grouped by tier, each with a score, the flag reason, a cited file+line link, and a one-line recommendation.
-- Then asks how much to post (all tiers / now + soon / now only / don't post) and comments on the PR only after you confirm.
+- Runs the same engine as `/code-review`: eligibility check, CLAUDE.md gathering, PR summary, parallel reviewers (scaled to PR size), and per-issue scoring. The scorer gets the actual diff hunk and CLAUDE.md contents, so it verifies rather than guesses.
+- **No 80 cutoff, and two axes instead of one.** Every issue is scored on **confidence** (0-100, is it real?) *and* **severity** (critical / major / minor, does it matter?), then triaged from both:
+  - **Address now** - real enough and impactful; fix before merge.
+  - **Address soon** - either real-but-lower-impact, or impactful-but-unverified; worth a follow-up.
+  - **Optional / nitpick** - minor and not strongly verified; author's discretion.
+  - **Likely false positive** - listed briefly so nothing is hidden, but recommend dismissing.
+- Presents all issues in-session, led by a verdict and per-tier counts, grouped by tier, each with a `[confidence]` prefix, severity, flag reason, cited file+line link, and a one-line recommendation.
+- Then asks how much to post (all tiers / now + soon / now only / don't post) and comments on the PR only after you confirm. The posted comment uses a summary table with lower tiers in collapsible `<details>`.
 
 ### `/deep-review:auto [pr-number|pr-url|branch]`
 
@@ -46,7 +48,7 @@ Then restart Claude Code. The commands appear namespaced as `/deep-review:review
 
 | | `/code-review` | `/deep-review:review` | `/deep-review:auto` |
 | --- | --- | --- | --- |
-| Confidence scoring | yes | yes | no |
+| Scoring | confidence only | confidence + severity (two-axis) | no |
 | Drops issues below 80 | yes | no (triages instead) | n/a |
 | Shows all findings in-session | no | yes | n/a |
 | Confirmation before posting | no | yes | no |

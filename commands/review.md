@@ -1,101 +1,107 @@
 ---
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(git branch:*), AskUserQuestion
-description: Deep code review - score every issue and present a now/later triage, then post on confirm
+allowed-tools: Read, Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(gh repo view:*), Bash(git branch:*), AskUserQuestion
+description: Deep code review - score every issue on confidence and severity, present a two-axis triage, then post on confirm
 argument-hint: "[pr-number|pr-url|branch]"
 disable-model-invocation: false
 ---
 
 # /deep-review:review
 
-Provide a deep code review for the given pull request. Unlike a standard review that drops everything below a confidence cutoff, this command keeps **every** scored issue, presents them all in-session triaged into priority tiers (address now vs later vs optional), recommends what to do with each, and only posts to the pull request after you confirm.
+Provide a deep code review for the given pull request. Unlike a standard review that drops everything below a confidence cutoff, this command keeps **every** scored issue, scores each on two axes (confidence that it is real, and severity if it is), presents them all in-session in a two-axis triage, recommends what to do with each, and only posts to the pull request after you confirm.
 
 The pull request is given in `$ARGUMENTS` (a PR number, PR URL, or branch name). If empty, resolve the PR for the current branch with `gh pr list --head <branch>`.
 
-To do this, follow these steps precisely. Make a todo list first.
+First, read `${CLAUDE_PLUGIN_ROOT}/reference/review-shared.md`. It holds the reviewer roster, the size-scaling rules, the dedup rule, the confidence and severity rubrics, the two-axis triage table, the false-positive list, the link format, the trailer policy, and the output style. Everything below references it - do not re-derive those rules.
 
-1. Use a Haiku agent to check if the pull request (a) is closed, (b) is a draft, (c) does not need a code review (eg. because it is an automated pull request, or is very simple and obviously ok), or (d) already has a code review from you from earlier. If so, do not proceed.
-2. Use another Haiku agent to give you a list of file paths to (but not the contents of) any relevant CLAUDE.md files from the codebase: the root CLAUDE.md file (if one exists), as well as any CLAUDE.md files in the directories whose files the pull request modified.
-3. Use a Haiku agent to view the pull request, and ask the agent to return a summary of the change.
-4. Then, launch 5 parallel Sonnet agents to independently code review the change. The agents should do the following, then return a list of issues and the reason each issue was flagged (eg. CLAUDE.md adherence, bug, historical git context, etc.):
-   a. Agent #1: Audit the changes to make sure they comply with the CLAUDE.md. Note that CLAUDE.md is guidance for Claude as it writes code, so not all instructions will be applicable during code review.
-   b. Agent #2: Read the file changes in the pull request, then do a shallow scan for obvious bugs. Avoid reading extra context beyond the changes, focusing just on the changes themselves. Focus on large bugs, and avoid small issues and nitpicks. Ignore likely false positives.
-   c. Agent #3: Read the git blame and history of the code modified, to identify any bugs in light of that historical context.
-   d. Agent #4: Read previous pull requests that touched these files, and check for any comments on those pull requests that may also apply to the current pull request.
-   e. Agent #5: Read code comments in the modified files, and make sure the changes in the pull request comply with any guidance in the comments.
-5. For each issue found in #4, launch a parallel Haiku agent that takes the PR, issue description, and list of CLAUDE.md files (from step 2), and returns a score to indicate the agent's level of confidence for whether the issue is real or false positive. To do that, the agent should score each issue on a scale from 0-100, indicating its level of confidence. For issues that were flagged due to CLAUDE.md instructions, the agent should double check that the CLAUDE.md actually calls out that issue specifically. The scale is (give this rubric to the agent verbatim):
-   a. 0: Not confident at all. This is a false positive that doesn't stand up to light scrutiny, or is a pre-existing issue.
-   b. 25: Somewhat confident. This might be a real issue, but may also be a false positive. The agent wasn't able to verify that it's a real issue. If the issue is stylistic, it is one that was not explicitly called out in the relevant CLAUDE.md.
-   c. 50: Moderately confident. The agent was able to verify this is a real issue, but it might be a nitpick or not happen very often in practice. Relative to the rest of the PR, it's not very important.
-   d. 75: Highly confident. The agent double checked the issue, and verified that it is very likely it is a real issue that will be hit in practice. The existing approach in the PR is insufficient. The issue is very important and will directly impact the code's functionality, or it is an issue that is directly mentioned in the relevant CLAUDE.md.
-   e. 100: Absolutely certain. The agent double checked the issue, and confirmed that it is definitely a real issue, that will happen frequently in practice. The evidence directly confirms this.
-6. **Triage, do not filter.** Keep every scored issue. Map each issue's score to a recommendation tier:
-   a. **Address now** = score 80-100. High confidence, real, and impactful. Should be fixed before merge.
-   b. **Address soon** = score 50-79. Verified real but lower impact or less frequent. Worth a follow-up.
-   c. **Optional / nitpick** = score 25-49. Minor or stylistic. Author's discretion.
-   d. **Likely false positive** = score 0-24. List briefly so nothing is hidden, but recommend dismissing.
-7. **Present in-session.** Before posting anything, print all issues to the user, grouped by tier (Address now first, then soon, optional, likely false positive), highest score first within each tier. For each issue include:
-   a. A one-line description.
-   b. The flag reason (CLAUDE.md adherence / bug / git history / prior PR comment / code comment).
-   c. The confidence score.
-   d. The cited file and line link (see link format below).
-   e. A one-line recommendation (eg. "Fix before merge", "Follow-up issue", "Safe to ignore").
+Then follow these steps precisely. Make a todo list first.
+
+1. **Eligibility.** Use a Haiku agent to check whether the pull request (a) is closed, (b) is a draft, (c) does not need a code review (eg. an automated PR, or very simple and obviously fine), or (d) already has a code review from you. If any apply, stop and report why.
+2. **Gather context.** Use a Haiku agent to return the file *paths* (not contents) of relevant CLAUDE.md files: the root CLAUDE.md (if any) plus any CLAUDE.md files in directories the PR modified.
+3. **Summarize.** Use a Haiku agent to view the pull request and return a summary of the change. Have it also report PR size (changed files, additions, deletions) so you can pick the reviewer scale from the shared reference.
+4. **Review.** Launch the reviewer roster from the shared reference (scaled to PR size) as parallel Sonnet agents. Collect every issue with its flag reason.
+5. **Dedup.** Apply the dedup rule from the shared reference before scoring, so the same finding is never scored or presented twice.
+6. **Score on both axes.** For each deduped issue, launch a parallel Haiku agent that receives:
+   - the issue description and its flag reason,
+   - the **actual diff hunk and surrounding file context** for the cited lines (fetch with `gh pr diff`),
+   - the **contents** of the relevant CLAUDE.md files (not just their paths).
+
+   The agent returns a **confidence** score (0-100, per the confidence rubric) and a **severity** (critical / major / minor, per the severity rubric). For issues flagged on CLAUDE.md grounds, the agent must confirm the CLAUDE.md actually calls out that issue specifically before scoring confidence high. Giving the agent the real code and CLAUDE.md text is what lets it verify rather than guess.
+7. **Verify the impactful-but-uncertain issues.** Run the verification pass from the shared reference: every issue that is severity critical/major with confidence < 60 gets a dedicated Sonnet agent that digs into the surrounding code and resolves it to confirmed / refuted / still-uncertain, updating its confidence (and attaching a "verify: ..." note when still uncertain). Tier on the post-verification confidence.
+8. **Triage, do not filter.** Keep every issue. Assign each to a tier using the two-axis triage table in the shared reference (post-verification confidence x severity). Drop only the clear false positives from the shared reference's false-positive list.
+9. **Present in-session.** Before posting anything, print the triage. Lead with a verdict, then the issues:
+   - **Verdict line:** a one-sentence read on the PR's health (eg. "1 blocking bug and 2 follow-ups; otherwise clean").
+   - **Counts line:** `Address now: N | Address soon: N | Optional: N | Likely false positive: N`.
+   - Then the issues grouped by tier (Address now first, then soon, optional, likely false positive), highest confidence first within each tier. For each issue:
+     - a `[confidence]` prefix (eg. `[92]`),
+     - the severity (critical / major / minor),
+     - a one-line description,
+     - the flag reason (CLAUDE.md adherence / bug / git history / prior PR comment / code comment),
+     - the cited file+line link (shared reference link format),
+     - a one-line recommendation (eg. "Fix before merge", "Follow-up issue", "Safe to ignore"). For a still-uncertain item carrying a verify note, the recommendation is "Verify <the thing>, then fix or dismiss".
 
    This in-session triage is the whole point of the command - the user sees everything, not just the high-confidence subset.
-8. **Confirm before posting.** First, use a Haiku agent to repeat the eligibility check from #1, to make sure the pull request is still eligible. Then use `AskUserQuestion` to ask how to post, with these options:
-   a. `Post all tiers` - post every issue, grouped by tier.
-   b. `Post now + soon only` - post only the Address now and Address soon tiers.
-   c. `Post now only` - post only the Address now tier.
-   d. `Don't post` - print nothing to the PR; you are done.
-9. **Post.** For any option other than `Don't post`, use the `gh` bash command to comment back on the pull request with the selected tiers. When writing your comment, keep in mind to:
-   a. Keep your output brief.
-   b. Avoid emojis (except the trailer below).
-   c. Link and cite relevant code, files, and URLs.
+10. **Confirm before posting.** First, use a Haiku agent to repeat the eligibility check from step 1, to make sure the PR is still eligible. Then use `AskUserQuestion` to ask how to post:
+   - `Post all tiers` - every issue, grouped by tier.
+   - `Post now + soon only` - only Address now and Address soon.
+   - `Post now only` - only Address now.
+   - `Don't post` - print nothing to the PR; you are done.
+11. **Post.** For any option other than `Don't post`, decide the trailer per the shared reference trailer policy, then use `gh pr comment` to post the selected tiers in the format below. Keep it brief, avoid emojis (except the trailer when it applies), and link/cite code per the shared reference.
 
-Examples of false positives, for steps 4 and 5:
+## Posted comment format
 
-- Pre-existing issues
-- Something that looks like a bug but is not actually a bug
-- Pedantic nitpicks that a senior engineer wouldn't call out
-- Issues that a linter, typechecker, or compiler would catch (eg. missing or incorrect imports, type errors, broken tests, formatting issues, pedantic style issues like newlines). No need to run these build steps yourself -- it is safe to assume that they will be run separately as part of CI.
-- General code quality issues (eg. lack of test coverage, general security issues, poor documentation), unless explicitly required in CLAUDE.md
-- Issues that are called out in CLAUDE.md, but explicitly silenced in the code (eg. due to a lint ignore comment)
-- Changes in functionality that are likely intentional or are directly related to the broader change
-- Real issues, but on lines that the user did not modify in their pull request
-
-Notes:
-
-- Do not check build signal or attempt to build or typecheck the app. These will run separately, and are not relevant to your code review.
-- Use `gh` to interact with Github (eg. to fetch a pull request, or to create comments), rather than web fetch.
-- You must cite and link each issue (eg. if referring to a CLAUDE.md, you must link it).
-- For your final comment, follow the following format precisely (assuming for this example that the user chose to post and there are issues in two tiers):
+Lead with the verdict and counts, put the headline tiers in a table, and wrap lower tiers in `<details>` so the comment stays scannable. Example assuming the user posted all tiers:
 
 ---
 
 ### Code review (deep-review)
 
+<one-sentence verdict>
+
+**Address now: 2 | Address soon: 1 | Optional: 1 | Likely false positive: 1**
+
 **Address now**
 
-1. <brief description of issue> (CLAUDE.md says "<...>")
+| # | Conf | Sev | Issue | Location |
+| --- | --- | --- | --- | --- |
+| 1 | 92 | critical | <brief description> (CLAUDE.md says "<...>") | [file.ts#L40-L43](https://github.com/owner/repo/blob/<full-sha>/file.ts#L40-L43) |
+| 2 | 78 | major | <brief description> (bug in `<snippet>`) | [api.ts#L11-L14](https://github.com/owner/repo/blob/<full-sha>/api.ts#L11-L14) |
 
-<link to file and line with full sha1 + line range for context, note that you MUST provide the full sha and not use bash here, eg. https://github.com/anthropics/claude-code/blob/1d54823877c4de72b2316a64032a54afc404e619/README.md#L13-L17>
+<details>
+<summary><b>Address soon</b> (1)</summary>
 
-2. <brief description of issue> (bug due to <file and code snippet>)
+| # | Conf | Sev | Issue | Location |
+| --- | --- | --- | --- | --- |
+| 3 | 64 | minor | <brief description> (some/other/CLAUDE.md says "<...>") | [util.ts#L7-L10](https://github.com/owner/repo/blob/<full-sha>/util.ts#L7-L10) |
 
-<link to file and line with full sha1 + line range for context>
+</details>
 
-**Address soon**
+<details>
+<summary><b>Optional / nitpick</b> (1)</summary>
 
-3. <brief description of issue> (some/other/CLAUDE.md says "<...>")
+| # | Conf | Sev | Issue | Location |
+| --- | --- | --- | --- | --- |
+| 4 | 38 | minor | <brief description> | [util.ts#L20-L23](https://github.com/owner/repo/blob/<full-sha>/util.ts#L20-L23) |
 
-<link to file and line with full sha1 + line range for context>
+</details>
+
+<details>
+<summary><b>Likely false positive</b> (1)</summary>
+
+| # | Conf | Sev | Issue | Location |
+| --- | --- | --- | --- | --- |
+| 5 | 15 | minor | <brief description> - recommend dismissing | [util.ts#L31-L34](https://github.com/owner/repo/blob/<full-sha>/util.ts#L31-L34) |
+
+</details>
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
-<sub>- This is a deep-review triage. Tiers reflect confidence, not a hard pass/fail. React with 👍 if useful, 👎 otherwise.</sub>
+<sub>- This is a deep-review triage. Tiers reflect confidence and severity, not a hard pass/fail. React with 👍 if useful, 👎 otherwise.</sub>
 
 ---
 
-- Or, if every tier you chose to post is empty (eg. you chose `Post now only` but there were no Address now issues), post:
+- Include only the tiers the user chose to post. Omit a tier's `<details>` block if it is empty.
+- Omit the `🤖 Generated with ...` trailer line on public repos (shared reference trailer policy); keep the `<sub>` footer either way.
+- If every tier you chose to post is empty (eg. `Post now only` with no Address now issues), post instead:
 
 ---
 
@@ -107,14 +113,9 @@ No issues found in the selected tiers. Checked for bugs and CLAUDE.md compliance
 
 ---
 
-- When linking to code, follow the following format precisely, otherwise the Markdown preview won't render correctly: https://github.com/anthropics/claude-cli-internal/blob/c21d3c10bc8e898b7ac1a2d745bdc9bc4e423afe/package.json#L10-L15
-  - Requires full git sha
-  - You must provide the full sha. Commands like `https://github.com/owner/repo/blob/$(git rev-parse HEAD)/foo/bar` will not work, since your comment will be directly rendered in Markdown.
-  - Repo name must match the repo you're code reviewing
-  - # sign after the file name
-  - Line range format is L[start]-L[end]
-  - Provide at least 1 line of context before and after, centered on the line you are commenting about (eg. if you are commenting about lines 5-6, you should link to `L4-7`)
+## Notes
 
-## Output style
-- Use plain hyphens (`-`) only. No em-dashes or en-dashes anywhere you write.
-- Be concise.
+- Do not check build signal or build/typecheck the app. CI runs these separately and they are not relevant to your review.
+- Use `gh` to interact with GitHub, not web fetch.
+- You must cite and link each issue (link the CLAUDE.md too when that is the flag reason).
+- All rubrics, the reviewer roster, the false-positive list, the link format, the trailer policy, and the output style live in `${CLAUDE_PLUGIN_ROOT}/reference/review-shared.md`. Follow it; do not re-derive.
