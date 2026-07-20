@@ -50,7 +50,14 @@ Resolve the default branch with `gh` as shown - **do not use `origin/HEAD`.** Th
 git stash create
 ```
 
-Run this once, after recording the baseline and before applying any fix, and keep the returned SHA. `git stash create` builds a dangling commit that captures the current tree **without modifying the working tree or the stash list** - it is purely a snapshot, not a stash push. If fixes are ever lost, that SHA is what recovers them (`git show <sha>`), so print it in the Step 5 summary. If the tree is clean it returns nothing, which is fine - there is nothing to lose yet.
+`git stash create` builds a dangling commit capturing the current tree **without modifying the working tree or the stash list** - purely a snapshot, not a stash push. Recover a file from one with `git checkout <sha> -- <path>`.
+
+**Take one before the first fix, and re-take it after every fix you apply.** Keep the newest SHA. These are two different protections and you need both:
+
+- The **pre-fix** snapshot protects the *user's* pre-existing uncommitted work.
+- Each **post-fix** snapshot protects *your fixes*. A snapshot taken before a fix exists cannot restore that fix - it restores the state without it, which is exactly what the clobber already did. On a clean tree the pre-fix snapshot is an empty string, so it protects nothing at all.
+
+Verified: with only a Step 0 snapshot, a mid-run `git checkout -- .` is unrecoverable. Re-snapshotting after each fix makes the same clobber fully recoverable.
 
 **Eligibility (PR mode only):** run a Haiku agent - if the PR is (a) closed, (b) a draft, (c) doesn't need review, or (d) already reviewed by you, do not proceed. In branch mode there is no eligibility check to run; skip it.
 
@@ -75,7 +82,8 @@ Work through the deduped issues one at a time. For each:
 
 - **Double-check before fixing.** Confirm the issue is real by reading the surrounding code and tracing the relevant behavior (this is the auto-fix equivalent of the shared reference's verification pass - it applies to every issue here, since there are no scores). Fix only what you can confirm.
 - **If you dispatch an agent to do that double-check, paste the shared reference's tree-mutation ban into its prompt.** Fixes from earlier iterations are sitting uncommitted in the tree right now; a verification agent that "resets to a clean state" destroys them, and `git status` will look fine afterwards. This is the single most damaging failure mode of this command.
-- **Record every fix as you apply it** - file, the exact region changed, and a one-line description. Step 4's integrity check needs this list, and it is also the only record that survives if something does clobber the tree.
+- **Record every fix as you apply it** - file, the exact region changed, the original text it replaced, and a one-line description. Step 4's integrity check needs this list; the original text is what an Edit-based revert restores; and it is the only record that survives if something does clobber the tree.
+- **Re-take the `git stash create` snapshot after each applied fix** and keep the newest SHA (see Step 0). This is what makes a mid-run clobber recoverable.
 - If confirmed, apply a minimal, targeted fix with Edit/Write that resolves the issue while respecting the relevant CLAUDE.md and surrounding code style.
 - If the issue cannot be confirmed or fixed safely and mechanically (refuted on a closer look, ambiguous intent, needs a design decision, would touch lines outside the review scope, or risks breaking behavior), **skip it** and record a one-line reason. Do not guess at risky changes.
 - If the fix would rewrite a region of a file that is dirty **and outside the review scope**, **skip it** per Step 0 and record that reason. Dirty files that are *inside* the review scope are fair game - fixing them is the point.
@@ -94,7 +102,7 @@ An auto-applied fix that breaks the build is the failure mode this command is mo
 **You need a pre-fix baseline to attribute a failure.** A gate result after fixing is uninterpretable on its own - a repo whose gate was already red will look like you broke it. So when a gate exists, run it **once at the end of Step 1, before any edit**, and keep that result. Then:
 
 - Baseline red, still red: report "gate was already failing before this run" and name the pre-existing failure. Do not attribute it to yourself and do not revert anything on its account.
-- Baseline green, now red: one of your fixes broke it. Identify which, undo that one **with an Edit restoring the original text** (never a git restore - see Step 0), record it as skipped with reason "reverted: broke the local gate", and re-run the gate once.
+- Baseline green, now red: one of your fixes broke it. Identify which, then **before reverting, check whether the fix is wrong or merely badly formatted.** A correct fix that trips a formatting rule (line too long, import order, trailing whitespace) should be **reformatted and re-run**, not thrown away - reverting it discards a real fix over a cosmetic violation and puts the original defect back. Only if the fix is genuinely wrong, or still fails after one reformat attempt, undo it **with an Edit restoring the original text** (never a git restore - see Step 0), record it as skipped with reason "reverted: broke the local gate", and re-run the gate once.
 - Baseline red, now green: say so. You fixed something that was already broken.
 
 **Integrity check (always, even when CI covers the gate).** Step 0's cleanliness check is a precondition, not an invariant - nothing re-checks it, so a mid-run clobber goes unnoticed. Before reporting, walk the Step 3 fix list and confirm **each fix is still present in the file**. For every fix, re-read the region and verify the change is actually there.
