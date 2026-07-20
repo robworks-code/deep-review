@@ -59,6 +59,13 @@ git stash create
 
 Verified: with only a Step 0 snapshot, a mid-run `git checkout -- .` is unrecoverable. Re-snapshotting after each fix makes the same clobber fully recoverable.
 
+**Caveat - `git stash create` does not capture untracked files.** It snapshots tracked modifications only, so an edit to a file git has never seen is outside the safety net. In practice this lines up with the threat: `git checkout -- .`, the clobber this guards against, cannot destroy untracked files either, so the protected set and the exposed set match. Two cases still fall through, and both are on you to avoid rather than to recover from:
+
+- `git clean -fd` deletes untracked files and the snapshot cannot bring them back. It is on the Step 0 ban list for exactly this reason - it is the one destructive command with no recovery path.
+- A fix that **creates a new file** is untracked and therefore unprotected. Step 3 keeps edits confined to files already in the review scope, which should make this rare; if you do create one, say so in the summary and note that it is not covered by the snapshot.
+
+If you need an untracked file protected, the honest answer is that this mechanism does not cover it - do not imply otherwise in the summary.
+
 **Eligibility (PR mode only):** run a Haiku agent - if the PR is (a) closed, (b) a draft, (c) doesn't need review, or (d) already reviewed by you, do not proceed. In branch mode there is no eligibility check to run; skip it.
 
 ## Step 1 - Gather context
@@ -108,7 +115,7 @@ An auto-applied fix that breaks the build is the failure mode this command is mo
 **Integrity check (always, even when CI covers the gate).** Step 0's cleanliness check is a precondition, not an invariant - nothing re-checks it, so a mid-run clobber goes unnoticed. Before reporting, walk the Step 3 fix list and confirm **each fix is still present in the file**. For every fix, re-read the region and verify the change is actually there.
 
 - All present: proceed to Step 5.
-- Any missing: something reverted the tree mid-run. Do **not** report those fixes as applied - that is the failure mode that makes this command lie. Recover from the `git stash create` SHA taken in Step 0, re-apply the missing fixes, and re-run the integrity check. State plainly in the summary that a mid-run revert was detected and recovered.
+- Any missing: something reverted the tree mid-run. Do **not** report those fixes as applied - that is the failure mode that makes this command lie. Recover with `git checkout <sha> -- <path>` from the **newest** snapshot SHA (the one taken after the most recent fix, not the Step 0 one - that predates the fixes and cannot restore them), re-apply anything the snapshot did not cover, and re-run the integrity check. If a lost fix was in an untracked file, the snapshot will not have it and you must re-apply it by hand. State plainly in the summary that a mid-run revert was detected and recovered.
 
 Never report a fix as applied on the strength of the Edit having succeeded. Edit success means the text changed at the time; it does not mean the change survived to the end of the run.
 
