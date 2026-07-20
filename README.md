@@ -20,14 +20,17 @@ The default, full-fidelity review.
   - **Likely false positive** - listed briefly so nothing is hidden, but recommend dismissing.
 - Presents all issues in-session, led by a verdict and per-tier counts, grouped by tier, each with a `[confidence]` prefix, severity, flag reason, cited file+line link, and a one-line recommendation.
 - Then asks how much to post (all tiers / now + soon / now only / don't post) and comments on the PR only after you confirm. The posted comment uses a summary table with lower tiers in collapsible `<details>`.
+- **Never assumes CI exists.** On a repo with no `.github/workflows`, linter/typechecker-class findings are reported (flag reason `build`) instead of being silently dropped, and the review names the repo's local gate command so you can run it. This command is read-only, so it reports the gate rather than running it.
 
 ### `/deep-review:auto [pr-number|pr-url|branch]`
 
 A faster, no-confirmation variant.
 
 - Runs the same 5-agent review but **skips the scoring step entirely** - every identified issue is treated as worth addressing.
-- **Auto-applies a best-effort fix** for each issue to the working tree, then posts a summary comment to the PR. No triage, no confirmation.
-- Refuses to run unless the PR's head branch is checked out locally with a clean working tree.
+- **Auto-applies a best-effort fix** for each issue to the working tree. No triage, no confirmation.
+- **Works with or without a PR.** With one, it reviews the PR diff and posts a summary comment. Without one, it reviews the branch against its merge-base with the default branch and reports in-session only. It still refuses if a PR exists but its head branch is not what is checked out.
+- **Runs on a dirty tree.** It records which files were already modified before it started, never rewrites a region you have uncommitted work in, and lists those files in the summary so you can tell its edits from yours.
+- **Runs the repo's local gate** after applying fixes when there is no CI, and reverts any fix that breaks it. Repos that verify locally instead of in CI are treated as verified-on-purpose, not unverified - so linter/typechecker-class findings are reported rather than discarded.
 - Fixes are left **uncommitted** in the working tree - review with `git diff`, then commit and push yourself. The command never commits or pushes.
 
 ## Install
@@ -41,8 +44,8 @@ Then restart Claude Code. The commands appear namespaced as `/deep-review:review
 
 ## Requirements
 
-- The GitHub CLI (`gh`) authenticated against the repo you are reviewing.
-- For `/deep-review:auto`: the pull request's head branch checked out locally with a clean tree.
+- The GitHub CLI (`gh`) authenticated against the repo you are reviewing. `/deep-review:auto` can run without a PR, but `/deep-review:review` needs one.
+- For `/deep-review:auto`: if the branch has a PR, that PR's head branch must be the one checked out. A dirty working tree is fine.
 
 ## How it differs from `/code-review`
 

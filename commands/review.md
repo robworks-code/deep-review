@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(gh repo view:*), Bash(git branch:*), AskUserQuestion
+allowed-tools: Read, Glob, Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(gh repo view:*), Bash(git branch:*), AskUserQuestion
 description: Deep code review - score every issue on confidence and severity, present a two-axis triage, then post on confirm
 argument-hint: "[pr-number|pr-url|branch]"
 disable-model-invocation: false
@@ -93,14 +93,14 @@ Lead with the verdict and counts, put the headline tiers in a table, and wrap lo
 
 </details>
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
+<!-- trailer: add the Claude Code trailer line here ONLY if the repo is confirmed PRIVATE per the shared reference trailer policy; otherwise omit entirely -->
 
 <sub>- This is a deep-review triage. Tiers reflect confidence and severity, not a hard pass/fail. React with 👍 if useful, 👎 otherwise.</sub>
 
 ---
 
 - Include only the tiers the user chose to post. Omit a tier's `<details>` block if it is empty.
-- Omit the `🤖 Generated with ...` trailer line on public repos (shared reference trailer policy); keep the `<sub>` footer either way.
+- The trailer is opt-in, not opt-out: include the `🤖 Generated with ...` line ONLY if `gh repo view --json visibility` positively returned PRIVATE or INTERNAL (shared reference trailer policy). On a public repo, an errored check, or a check you skipped, omit it. Keep the `<sub>` footer in all cases.
 - If every tier you chose to post is empty (eg. `Post now only` with no Address now issues), post instead:
 
 ---
@@ -109,13 +109,13 @@ Lead with the verdict and counts, put the headline tiers in a table, and wrap lo
 
 No issues found in the selected tiers. Checked for bugs and CLAUDE.md compliance.
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
+<!-- trailer: add the Claude Code trailer line here ONLY if the repo is confirmed PRIVATE per the shared reference trailer policy; otherwise omit entirely -->
 
 ---
 
 ## Notes
 
-- Do not check build signal or build/typecheck the app. CI runs these separately and they are not relevant to your review.
+- Do not build or typecheck the app yourself - this command is read-only and its `allowed-tools` grants no general Bash. But do **not** assume CI covers that ground: apply the shared reference's "Verification signal" rule. If the repo has no `.github/workflows`, compiler-class findings are real findings, so report them (flag reason `build`) instead of dropping them, and name the local gate command you found so the author can run it.
 - Use `gh` to interact with GitHub, not web fetch.
 - You must cite and link each issue (link the CLAUDE.md too when that is the flag reason).
 - All rubrics, the reviewer roster, the false-positive list, the link format, the trailer policy, and the output style live in `${CLAUDE_PLUGIN_ROOT}/reference/review-shared.md`. Follow it; do not re-derive.

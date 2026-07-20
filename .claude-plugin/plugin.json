@@ -1,7 +1,7 @@
 {
   "name": "deep-review",
-  "version": "0.2.0",
-  "description": "Multi-agent pull request review that surfaces every finding instead of hiding low-confidence ones. /deep-review:review scores each issue, then presents all of them in-session triaged into now/soon/optional tiers and posts to the PR on confirm. /deep-review:auto skips scoring, auto-applies fixes for every issue to the working tree, and posts a summary comment - no confirmation.",
+  "version": "0.3.0",
+  "description": "Multi-agent pull request review that surfaces every finding instead of hiding low-confidence ones. /deep-review:review scores each issue, then presents all of them in-session triaged into now/soon/optional tiers and posts to the PR on confirm. /deep-review:auto skips scoring and auto-applies a fix for every issue to the working tree, then runs the repo's local gate to verify them and checks that every fix survived the run. It works with or without a PR (commenting only when one exists), tolerates a dirty tree without overwriting unrelated uncommitted work, and never assumes CI exists.",
   "author": {
     "name": "Ryan Robson and Robworks Software LLC"
   },
