@@ -36,7 +36,7 @@ A faster, no-confirmation variant.
 ## Install
 
 ```bash
-claude plugin marketplace add ringo380/robworks-claude-code-plugins
+claude plugin marketplace add robworks-code/robworks-claude-code-plugins
 claude plugin install deep-review@robworks-claude-code-plugins
 ```
 
